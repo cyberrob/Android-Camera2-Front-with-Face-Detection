@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/Android-Camera2-Front-with-Face-Detection.iml" filepath="$PROJECT_DIR$/Android-Camera2-Front-with-Face-Detection.iml" />
       <module fileurl="file://$PROJECT_DIR$/Application/Application.iml" filepath="$PROJECT_DIR$/Application/Application.iml" />
-      <module fileurl="file://$PROJECT_DIR$/android-Camera2Basic-master.iml" filepath="$PROJECT_DIR$/android-Camera2Basic-master.iml" />
     </modules>
   </component>
 </project>
