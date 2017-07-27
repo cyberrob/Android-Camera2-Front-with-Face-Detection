@@ -81,6 +81,8 @@ public class Camera2BasicFragment extends Fragment
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String FRAGMENT_DIALOG = "dialog";
+    private static final int STATE_SAVING_FILE = 5;
+    private static final long FREQUENCY_THRESHOLD = 800;
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -349,7 +351,8 @@ public class Camera2BasicFragment extends Fragment
         }
     };
     private int facesFound, facesFoundLastTime = 0;
-    private boolean saved = false;
+    private Boolean checking = false;
+    private long mFileMills, mFileLastMills;
 
     /**
      * Given {@code choices} of {@code Size}s supported by a camera, choose the smallest one that
@@ -402,30 +405,37 @@ public class Camera2BasicFragment extends Fragment
 
 
     private void checkFaces(Face[] faces) {
-        if (faces != null && faces.length > 0) {
-            if (facesFound == faces.length) {
-                Log.d("tag", +faces.length + " == " + facesFound);
-                return;
-            } else {
-                for (Face face : faces) {
-                    if (face.getScore() >= Face.SCORE_MAX / 2) {
-                        Log.d("tag", face.toString());
-                        facesFoundLastTime = facesFound;
-                        facesFound++;
-                        Log.d("tag", "facesFound: " + facesFound + " ,facesFoundLastTime: " + facesFoundLastTime);
+        if (faces != null) {
+            if (!checking) {
+                if (faces.length > 0) {
+                    checking = true;
+                    if (facesFound == faces.length) {
+                        Log.d("tag", faces.length + " == " + facesFound + " no need to re-capture.");
+                        checking = false;
+                        return;
                     }
+                    facesFoundLastTime = facesFound;
+                    facesFound = 0;
+                    for (Face face : faces) {
+                        if (face.getScore() >= Face.SCORE_MAX / 2) {
+                            facesFound++;
+                        }
+                    }
+                    Log.d("tag", "facesFound: " + facesFound + " ,facesFoundLastTime: " + facesFoundLastTime);
+                    if (facesFound != facesFoundLastTime && facesFound != 0) {
+                        // Try capture frame & save it into file
+                        takePicture();
+                    }
+                    checking = false;
+                } else if (faces.length == 0) {
+                    Log.d("tag", "No face found.");
+                    facesFound = 0;
+                    facesFoundLastTime = 0;
+                    checking = false;
+                    return;
                 }
-                Log.d("tag", "Found: " + facesFound + " faces with score higher than 50");
-                if (facesFound != facesFoundLastTime && saved == false) {
-                    // Try capture frame & save it into file
-                    takePicture();
-                    saved = true;
-                }
+                checking = false;
             }
-        } else if (faces != null && faces.length == 0) {
-            facesFound = 0;
-            facesFoundLastTime = 0;
-            saved = false;
         }
     }
 
@@ -437,12 +447,7 @@ public class Camera2BasicFragment extends Fragment
     private void showToast(final String text) {
         final Activity activity = getActivity();
         if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    Toast.makeText(activity, text, Toast.LENGTH_SHORT).show();
-                }
-            });
+            activity.runOnUiThread(() -> Toast.makeText(activity, text, Toast.LENGTH_SHORT).show());
         }
     }
 
@@ -543,7 +548,7 @@ public class Camera2BasicFragment extends Fragment
                 System.out.println("cam id " + cameraId);
                 // We don't use a front facing camera in this sample.
                 int facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if (facing == CameraCharacteristics/*.LENS_FACING_BACK*/.LENS_FACING_FRONT) {
+                if (facing == CameraCharacteristics.LENS_FACING_BACK/*.LENS_FACING_FRONT*/) {
 
                     StreamConfigurationMap map = characteristics.get(
                             CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -882,8 +887,15 @@ public class Camera2BasicFragment extends Fragment
                                                @NonNull CaptureRequest request,
                                                @NonNull TotalCaptureResult result) {
                     // Save to different file
-                    mFile = new File(getActivity().getExternalFilesDir(null), String.valueOf(System.currentTimeMillis()) + ".jpg");
-                    showToast("Saved: " + mFile);
+                    mFileLastMills = mFileMills;
+                    mFileMills = System.currentTimeMillis();
+                    if (Math.abs(mFileMills - mFileLastMills) < FREQUENCY_THRESHOLD) {
+                        Log.d("tag", "Don't save file for now, frequency too high!");
+                        unlockFocus();
+                        return;
+                    }
+                    mFile = new File(getActivity().getExternalFilesDir(null), String.valueOf(mFileMills) + ".jpg");
+                    //showToast("Saved: " + mFile);
                     Log.d("tag", mFile.toString());
                     unlockFocus();
                 }
@@ -999,7 +1011,6 @@ public class Camera2BasicFragment extends Fragment
                 }
             }
         }
-
     }
 
     /**
